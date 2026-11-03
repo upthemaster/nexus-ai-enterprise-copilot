@@ -1,0 +1,74 @@
+flowchart TD
+    %% NexusAI Day 9 Deployment & CI/CD Flow
+    %% Solid nodes: IMPLEMENTED in Day 9
+
+    subgraph DeveloperAndCI ["CI/CD Pipeline (GitHub Actions) [IMPLEMENTED]"]
+        GitPush["Git Push / Pull Request (main)"]:::ci
+        subgraph CIWorkflow ["ci.yml Workflow (.github/workflows/ci.yml)"]
+            JobBackend["Job: backend-tests\n- Python 3.10\n- Install CPU PyTorch & Deps\n- Run pytest backend/tests (67 tests)"]:::ci
+            JobFrontend["Job: frontend-build\n- Node 20 Alpine\n- npm ci\n- tsc && vite build"]:::ci
+            JobDocker["Job: docker-validation\n- Docker Compose CLI\n- Validate docker-compose.yml syntax"]:::ci
+        end
+        GitPush --> JobBackend
+        GitPush --> JobFrontend
+        GitPush --> JobDocker
+    end
+
+    subgraph HostDeployment ["Docker Host & Container Orchestration [IMPLEMENTED]"]
+        DockerCompose["Docker Compose Engine (docker-compose.yml)"]:::container
+        
+        subgraph FrontendContainer ["Frontend Service (Port 3000:80) [IMPLEMENTED]"]
+            FE_Build["Stage 1: node:20-alpine\n(tsc && vite build)"]:::container
+            FE_Run["Stage 2: nginx:1.27-alpine\n(Non-root user 'nginx')"]:::container
+            NginxConfig["Nginx Reverse Proxy & SPA Routing\n(frontend/nginx.conf)"]:::container
+            FE_Build -->|"Copies /dist assets"| FE_Run
+            FE_Run --> NginxConfig
+        end
+
+        subgraph BackendContainer ["Backend Service (Port 8000:8000) [IMPLEMENTED]"]
+            BE_Base["Base: python:3.10-slim\n(Debian Bookworm)"]:::container
+            BE_PyTorch["CPU-Optimized PyTorch Wheels\n(--index-url whl/cpu ~800MB)"]:::container
+            BE_Cache["Pre-downloaded Model Weights\n(/home/nexususer/.cache/...)"]:::container
+            BE_App["FastAPI Application\n(Uvicorn 4 workers)"]:::container
+            BE_User["Non-Root Security Context\n(nexususer:nexusgroup UID 10001)"]:::container
+            BE_Health["Healthcheck probe\n(curl -f http://localhost:8000/api/v1/health)"]:::container
+
+            BE_Base --> BE_PyTorch
+            BE_PyTorch --> BE_Cache
+            BE_Cache --> BE_App
+            BE_App --> BE_User
+            BE_User --> BE_Health
+        end
+
+        subgraph PersistentVolumes ["Host Persistent Volumes (./data) [IMPLEMENTED]"]
+            VolChroma[("./data/chroma -> /app/data/chroma\n(ChromaDB Dense Vectors)")]:::volume
+            VolBM25[("./data/bm25 -> /app/data/bm25\n(BM25 Inverted Token Indices)")]:::volume
+            VolUploads[("./data/uploads -> /app/data/uploads\n(Raw Ingested Documents)")]:::volume
+            VolConvs[("./data/conversations -> /app/data/conversations\n(SQLite & Session History)")]:::volume
+        end
+
+        DockerCompose --> FrontendContainer
+        DockerCompose --> BackendContainer
+        BackendContainer --> VolChroma
+        BackendContainer --> VolBM25
+        BackendContainer --> VolUploads
+        BackendContainer --> VolConvs
+    end
+
+    subgraph RuntimeNetworkFlow ["Client Traffic & Proxy Routing [IMPLEMENTED]"]
+        BrowserClient["Enterprise Web Browser\n(http://localhost:3000)"]:::client
+        
+        BrowserClient -->|"GET / (HTML5 SPA Router)"| NginxConfig
+        NginxConfig -->|"Serve static assets (index.html, JS, CSS)"| BrowserClient
+        
+        BrowserClient -->|"POST /api/v1/* (Direct REST API Call)"| NginxConfig
+        NginxConfig -->|"Internal Reverse Proxy\n(proxy_pass http://backend:8000/api/v1/)"| BE_App
+        BE_App -->|"JSON Response + Headers\n(Single-Origin, Zero CORS)"| NginxConfig
+        NginxConfig -->|"Forward payload to browser"| BrowserClient
+    end
+
+    classDef ci fill:#2980b9,stroke:#1b4f72,stroke-width:2px,color:#ffffff;
+    classDef container fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+    classDef volume fill:#d35400,stroke:#a04000,stroke-width:2px,color:#ffffff;
+    classDef client fill:#8e44ad,stroke:#5b2c6f,stroke-width:2px,color:#ffffff;
+

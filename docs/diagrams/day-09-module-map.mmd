@@ -1,0 +1,80 @@
+classDiagram
+    %% NexusAI Day 9 Module Map & Testing/Deployment Architecture
+    %% Solid nodes: IMPLEMENTED
+
+    class SecurityTestSuite {
+        +test_adversarial_context_injection_in_document()
+        +test_indirect_query_xml_tag_breakout()
+        +test_secret_leakage_and_error_sanitization()
+        +test_resource_exhaustion_massive_query()
+        +test_top_k_boundary_handling()
+        +test_filename_null_byte_and_path_traversal()
+        +test_document_deletion_and_reindex_idempotency()
+    }
+
+    class EndToEndIntegrationTest {
+        +test_full_enterprise_copilot_lifecycle()
+        -step_1_health_probe()
+        -step_2_document_upload()
+        -step_3_document_inventory()
+        -step_4_conversation_creation()
+        -step_5_grounded_qa_citations()
+        -step_6_citation_sidecar_inspection()
+        -step_7_multiturn_followup()
+        -step_8_executive_summary()
+        -step_9_risk_extraction()
+        -step_10_negative_abstention()
+        -step_11_resource_cleanup()
+    }
+
+    class BackendDockerfile {
+        +Base: python:3.10-slim
+        +PyTorch: whl/cpu (800MB)
+        +User: nexususer (UID 10001)
+        +Cache: /home/nexususer/.cache
+        +Healthcheck: curl /api/v1/health
+        +Port: 8000
+    }
+
+    class FrontendDockerfile {
+        +Stage1: node:20-alpine builder
+        +Stage2: nginx:1.27-alpine runner
+        +User: nginx
+        +Port: 80
+        +Assets: /usr/share/nginx/html
+    }
+
+    class NginxReverseProxyConfig {
+        +try_files $uri $uri/ /index.html
+        +proxy_pass http://backend:8000/api/v1/
+        +gzip on
+        +X-Frame-Options SAMEORIGIN
+        +X-Content-Type-Options nosniff
+    }
+
+    class DockerComposeOrchestrator {
+        +Service: backend (:8000)
+        +Service: frontend (:3000 -> :80)
+        +Network: nexus-network (bridge)
+        +Volume: ./data/chroma
+        +Volume: ./data/bm25
+        +Volume: ./data/conversations
+        +Volume: ./data/uploads
+    }
+
+    class GitHubActionsWorkflow {
+        +Trigger: push / pull_request [main]
+        +Job: backend-tests (py3.10, pytest)
+        +Job: frontend-build (node20, vite build)
+        +Job: docker-validation (compose config)
+    }
+
+    DockerComposeOrchestrator --> BackendDockerfile : builds & runs
+    DockerComposeOrchestrator --> FrontendDockerfile : builds & runs
+    FrontendDockerfile --> NginxReverseProxyConfig : bundles
+    SecurityTestSuite ..> BackendDockerfile : validates defenses
+    EndToEndIntegrationTest ..> DockerComposeOrchestrator : exercises lifecycle
+    GitHubActionsWorkflow --> SecurityTestSuite : executes in CI
+    GitHubActionsWorkflow --> EndToEndIntegrationTest : executes in CI
+    GitHubActionsWorkflow --> DockerComposeOrchestrator : validates config
+

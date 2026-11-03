@@ -1,0 +1,144 @@
+flowchart TD
+    %% NexusAI Master System Architecture
+    %% Solid nodes: IMPLEMENTED (Day 1, Day 2, Day 3, Day 4, Day 5, Day 6, Day 7 & Day 8)
+    %% Dashed/Grey nodes: PLANNED (Future Days)
+
+    subgraph ClientLayer ["Client Layer [IMPLEMENTED]"]
+        UI["React SPA (Vite + TypeScript + Tailwind) [IMPLEMENTED]"]:::implemented
+    end
+
+    subgraph APILayer ["FastAPI API Layer [IMPLEMENTED]"]
+        FastAPIApp["FastAPI Application (app/main.py)"]:::implemented
+        HealthRoute["GET /api/v1/health"]:::implemented
+        UploadRoute["POST /api/v1/documents/upload"]:::implemented
+        SearchRoute["POST /api/v1/search/* (vector, bm25, hybrid)"]:::implemented
+        ChatRoute["POST /api/v1/chat"]:::implemented
+        CitationRoute["GET /api/v1/citations/:id"]:::implemented
+        ConvRoute["/api/v1/conversations/*"]:::implemented
+        WorkflowRoute["POST /api/v1/workflows/* & /documents/:id/*"]:::implemented
+        EvalRoute["/api/v1/evaluation/* (run, ablation, history)"]:::implemented
+    end
+
+    subgraph IngestionSubsystem ["Ingestion Subsystem [IMPLEMENTED]"]
+        DocService["DocumentService (app/services/document_service.py)"]:::implemented
+        Validator["Validator: Stream Size, Magic Bytes, Traversal (app/ingestion/validator.py)"]:::implemented
+        Extractor["Extractor: PDF, DOCX, TXT (app/ingestion/extractor.py)"]:::implemented
+        DiskStorage[("Local Upload Storage: data/uploads/")]:::implemented
+    end
+
+    subgraph IndexingSubsystem ["Dual-Indexing & Storage Subsystem [IMPLEMENTED]"]
+        IndexingService["IndexingService (app/services/indexing_service.py)"]:::implemented
+        Chunker["Page-Aware Text Splitter (app/ingestion/chunker.py)"]:::implemented
+        Embedder["SentenceTransformer: all-MiniLM-L6-v2 (app/retrieval/embeddings.py)"]:::implemented
+        ChromaStore[("ChromaDB Vector Store: data/chroma/ (app/retrieval/vector_store.py)")]:::implemented
+        BM25Store[("BM25 Sparse Index: data/bm25_index.json (app/retrieval/bm25_index.py)")]:::implemented
+        SQLiteStore[("SQLite Metadata DB: data/nexusai.db (app/db/session.py)")]:::implemented
+    end
+
+    subgraph RetrievalSubsystem ["Retrieval & Fusion Subsystem [IMPLEMENTED]"]
+        HybridRetriever["Hybrid Retriever (app/retrieval/hybrid.py)"]:::implemented
+        RRFusion["Reciprocal Rank Fusion RRF (k=60)"]:::implemented
+        Reranker["Cross-Encoder Reranker: ms-marco-MiniLM (app/retrieval/reranker.py)"]:::implemented
+    end
+
+    subgraph WorkflowSubsystem ["Workflow & Generation Subsystem [IMPLEMENTED]"]
+        ChatService["ChatService (app/services/chat_service.py) [IMPLEMENTED]"]:::implemented
+        CitationService["CitationService: Quote Matcher & Inspector [IMPLEMENTED]"]:::implemented
+        ConvService["ConversationService: Session Persistence [IMPLEMENTED]"]:::implemented
+        LLMAdapter["LLM Provider Adapter: Gemini / OpenAI / Mock [IMPLEMENTED]"]:::implemented
+        LangGraphOrch["LangGraph Orchestrator: Stateful Workflows (app/workflows/graph.py) [IMPLEMENTED]"]:::implemented
+    end
+
+    subgraph EvaluationSubsystem ["Evaluation & Benchmarking Subsystem [IMPLEMENTED]"]
+        EvalRunner["BenchmarkRunner & Metrics Engine (app/evaluation/benchmarks.py)"]:::implemented
+        EvalService["EvaluationService: Historical Runs (app/services/evaluation_service.py)"]:::implemented
+        GoldenDataset[("Golden Evaluation Dataset: v1.jsonl & Corpus")]:::implemented
+        EvalStore[("Evaluation Run History: data/eval_runs/")]:::implemented
+    end
+
+    %% Client to API Connections
+    UI -.->|"HTTPS / JSON"| FastAPIApp
+    FastAPIApp --> HealthRoute
+    FastAPIApp --> UploadRoute
+    FastAPIApp --> SearchRoute
+    FastAPIApp --> ChatRoute
+    FastAPIApp --> CitationRoute
+    FastAPIApp --> ConvRoute
+    FastAPIApp --> WorkflowRoute
+    FastAPIApp --> EvalRoute
+
+    %% Upload Ingestion & Dual-Indexing Flow
+    UploadRoute -->|"UploadFile"| DocService
+    DocService -->|"Stream & Validate"| Validator
+    DocService -->|"Persist bytes"| DiskStorage
+    DocService -->|"Extract text & metadata"| Extractor
+    DocService -->|"Extracted Pages"| IndexingService
+    IndexingService -->|"Recursive Split"| Chunker
+    IndexingService -->|"Chunk Texts"| Embedder
+    Embedder -->|"Dense 384d Vectors"| ChromaStore
+    IndexingService -->|"Dense Upsert"| ChromaStore
+    IndexingService -->|"Tokens & Chunks"| BM25Store
+
+    %% Hybrid Search Flow (Day 3)
+    SearchRoute -->|"Query & Top_K"| IndexingService
+    IndexingService -->|"Hybrid Query"| HybridRetriever
+    HybridRetriever -->|"Dense Top_K"| ChromaStore
+    HybridRetriever -->|"Sparse Top_K"| BM25Store
+    HybridRetriever -->|"Merge & Score"| RRFusion
+    RRFusion -->|"Ranked Candidates + Debug"| IndexingService
+
+    %% Grounded Chat & Session Flow (Day 4 & 5)
+    ChatRoute -->|"ChatRequest"| ChatService
+    ChatService <-->|"Session History"| ConvService
+    ConvService <-->|"CRUD"| SQLiteStore
+    ConvRoute --> ConvService
+    CitationRoute --> CitationService
+    CitationService --> ChromaStore & BM25Store
+
+    ChatService -->|"Contextualized Query"| HybridRetriever
+    HybridRetriever -->|"Top Candidates"| Reranker
+    Reranker -->|"Top-K Passages"| ChatService
+    ChatService -->|"Delimited Prompt + History"| LLMAdapter
+    LLMAdapter -->|"Raw Answer & Tags"| CitationService
+    CitationService -->|"Validated Citations & Quotes"| ChatService
+
+    %% Workflow & Orchestration Flow (Day 6)
+    WorkflowRoute -->|"WorkflowRequest"| LangGraphOrch
+    LangGraphOrch -->|"tool_hybrid_search"| HybridRetriever
+    LangGraphOrch -->|"generate"| LLMAdapter
+
+    %% Evaluation & Benchmarking Flow (Day 7)
+    EvalRoute --> EvalService
+    EvalService --> EvalRunner
+    EvalService --> EvalStore
+    EvalRunner --> GoldenDataset
+    EvalRunner --> ChromaStore
+    EvalRunner --> BM25Store
+    EvalRunner --> HybridRetriever
+    EvalRunner --> Reranker
+    EvalRunner --> LLMAdapter
+
+    subgraph DeploymentSubsystem ["Deployment, Packaging & CI/CD Subsystem [IMPLEMENTED]"]
+        DockerCompose["Docker Compose Orchestrator (docker-compose.yml)"]:::implemented
+        NginxProxy["Nginx Reverse Proxy & Static Host (frontend/nginx.conf)"]:::implemented
+        BEContainer["Backend Container: python:3.10-slim (backend/Dockerfile)"]:::implemented
+        FEContainer["Frontend Container: node:20 + nginx:1.27 (frontend/Dockerfile)"]:::implemented
+        CIWorkflow["GitHub Actions CI Pipeline (.github/workflows/ci.yml)"]:::implemented
+    end
+
+    %% Deployment Connections
+    DockerCompose --> BEContainer & FEContainer
+    FEContainer --> NginxProxy
+    NginxProxy --> UI
+    NginxProxy -->|"Proxy /api/v1/"| FastAPIApp
+    BEContainer --> FastAPIApp
+    CIWorkflow -.->|"Validates"| FastAPIApp & UI & DockerCompose
+
+    %% Legend Subgraph
+    subgraph ArchitectureLegend ["Legend"]
+        LegImplemented["Solid Green: 100% IMPLEMENTED & VERIFIED (Days 1 through 10 Complete)"]:::implemented
+    end
+
+    %% Styling Classes
+    classDef implemented fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+    classDef planned fill:#f8f9f9,stroke:#bdc3c7,stroke-width:2px,stroke-dasharray: 5 5,color:#7f8c8d;

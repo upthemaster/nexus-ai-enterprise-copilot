@@ -1,0 +1,78 @@
+flowchart TD
+    %% NexusAI Day 1 Backend Module Map & Dependency Flow
+    %% Matches real implementation files on disk
+
+    subgraph CoreModule ["core/ (Foundational Layer)"]
+        Config["core/config.py\n(Settings, pydantic-settings)"]:::core
+        Errors["core/errors.py\n(NexusBaseException, Error Types)"]:::core
+    end
+
+    subgraph SchemasModule ["schemas/ (Data Contracts)"]
+        HealthSchema["schemas/health.py\n(HealthResponse)"]:::schema
+        DocSchema["schemas/document.py\n(DocumentUploadResponse, PageExtraction)"]:::schema
+    end
+
+    subgraph IngestionModule ["ingestion/ (Parser & Validator)"]
+        Validator["ingestion/validator.py\n(Filename, Signature, Stream Size)"]:::ingestion
+        Extractor["ingestion/extractor.py\n(pypdf, python-docx, text normalizer)"]:::ingestion
+    end
+
+    subgraph ServicesModule ["services/ (Business Logic)"]
+        DocService["services/document_service.py\n(DocumentService Orchestration)"]:::service
+    end
+
+    subgraph APIModule ["api/v1/ (HTTP Transport)"]
+        HealthEndpoint["api/v1/endpoints/health.py\n(GET /api/v1/health)"]:::api
+        DocEndpoint["api/v1/endpoints/documents.py\n(POST /api/v1/documents/upload)"]:::api
+        V1Router["api/v1/router.py\n(APIRouter aggregation)"]:::api
+    end
+
+    subgraph MainApp ["app/ (Application Lifecycle & Safety)"]
+        Main["main.py\n(FastAPI app, Lifespan, Exception Handlers)"]:::main
+    end
+
+    subgraph TestSuite ["tests/ (Automated Quality Gate)"]
+        Conftest["tests/conftest.py\n(Fixtures, In-Memory Generators)"]:::test
+        TestHealth["tests/test_health.py\n(Health endpoint tests)"]:::test
+        TestUpload["tests/test_upload.py\n(10 Ingestion test scenarios)"]:::test
+    end
+
+    %% Dependency Arrows
+    Main --> V1Router
+    Main --> Config
+    Main --> Errors
+
+    V1Router --> HealthEndpoint
+    V1Router --> DocEndpoint
+
+    HealthEndpoint --> HealthSchema
+
+    DocEndpoint --> DocSchema
+    DocEndpoint --> DocService
+
+    DocService --> Validator
+    DocService --> Extractor
+    DocService --> DocSchema
+    DocService --> Config
+
+    Validator --> Config
+    Validator --> Errors
+
+    Extractor --> Errors
+    Extractor --> DocSchema
+
+    %% Test Dependencies
+    Conftest --> Main
+    Conftest --> Config
+    TestHealth --> Conftest
+    TestUpload --> Conftest
+
+    %% Styling
+    classDef main fill:#2c3e50,stroke:#1a252f,stroke-width:2px,color:#ffffff;
+    classDef api fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#ffffff;
+    classDef service fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#ffffff;
+    classDef ingestion fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#ffffff;
+    classDef schema fill:#1abc9c,stroke:#16a085,stroke-width:2px,color:#ffffff;
+    classDef core fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#ffffff;
+    classDef test fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+

@@ -1,0 +1,80 @@
+flowchart TD
+    %% Day 8 Frontend Architecture & User Interaction Flow
+    %% Solid nodes: IMPLEMENTED
+    %% Dashed nodes: PLANNED
+
+    subgraph Browser ["Web Browser (Client) [IMPLEMENTED]"]
+        User(["Enterprise User"]):::implemented
+
+        subgraph ReactApp ["React 18 SPA (Vite + TypeScript + Tailwind) [IMPLEMENTED]"]
+            App["App.tsx (Root State & Navigation)"]:::implemented
+            Navbar["Navbar.tsx (Heartbeat Ping & Global Tabs)"]:::implemented
+            
+            subgraph Views ["Workspace Views [IMPLEMENTED]"]
+                Dashboard["DashboardView.tsx\n- KPI Stat Cards\n- Document Activity\n- Stack Architecture"]:::implemented
+                Documents["DocumentsView.tsx\n- Drag-and-Drop Uploader\n- Document Catalog Table\n- Summarize & Risk Modals"]:::implemented
+                Chat["ChatView.tsx\n- Conversation Sidebar\n- Workflow Pill Selector\n- Grounded Answer Stream\n- Citation Badges & Abstention"]:::implemented
+                Evaluation["EvaluationView.tsx\n- 4-Way Ablation Table\n- Benchmark Trigger Buttons\n- Historical Runs Table"]:::implemented
+                Settings["SettingsView.tsx\n- Runtime Provider Status\n- Model Identifier\n- Guardrail Thresholds"]:::implemented
+            end
+
+            SidecarModal["SourceInspectorModal.tsx\n- Click-to-Verify Drawer\n- Verbatim Quote Highlight\n- Full Passage & Metadata"]:::implemented
+        end
+
+        subgraph ClientAPI ["API Transport Layer [IMPLEMENTED]"]
+            ApiClient["api/client.ts (Typed Fetch Client)"]:::implemented
+            Types["types/api.ts (Pydantic Mappings)"]:::implemented
+            ViteProxy["Vite Dev Reverse Proxy (/api -> :8000)"]:::implemented
+        end
+    end
+
+    subgraph Backend ["FastAPI Backend (localhost:8000) [IMPLEMENTED]"]
+        HealthEndpoint["GET /api/v1/health"]:::implemented
+        DocEndpoints["/api/v1/documents/*\n(upload, list, details, delete)"]:::implemented
+        ChatEndpoint["POST /api/v1/chat"]:::implemented
+        WorkflowEndpoint["POST /api/v1/workflows/run\n& /documents/:id/*"]:::implemented
+        CitationEndpoint["GET /api/v1/citations/:chunk_id"]:::implemented
+        ConvEndpoints["/api/v1/conversations/*\n(list, create, thread, delete)"]:::implemented
+        EvalEndpoints["/api/v1/evaluation/*\n(ablation, run, history)"]:::implemented
+    end
+
+    %% User interactions
+    User -->|"Navigates Tabs"| Navbar
+    Navbar -->|"Switches View"| App
+    App --> Dashboard
+    App --> Documents
+    App --> Chat
+    App --> Evaluation
+    App --> Settings
+
+    %% Document Upload & Management
+    Documents -->|"Uploads File (PDF/DOCX/TXT)"| ApiClient
+    ApiClient -->|"POST /documents/upload"| ViteProxy
+    ViteProxy --> DocEndpoints
+
+    %% Chat & Workflows
+    Chat -->|"Submits Prompt & Top-K"| ApiClient
+    ApiClient -->|"POST /workflows/run"| ViteProxy
+    ViteProxy --> WorkflowEndpoint
+    WorkflowEndpoint -->|"Returns Answer, Citations & Timing"| Chat
+
+    %% Citation Inspection
+    Chat -.->|"Clicks [chunk_id] Pill"| SidecarModal
+    Documents -.->|"Inspects Source"| SidecarModal
+    SidecarModal -->|"GET /citations/:chunk_id"| ApiClient
+    ApiClient --> ViteProxy
+    ViteProxy --> CitationEndpoint
+
+    %% Evaluation & Benchmarks
+    Evaluation -->|"Clicks Run 4-Way Ablation"| ApiClient
+    ApiClient -->|"GET /evaluation/ablation"| ViteProxy
+    ViteProxy --> EvalEndpoints
+
+    %% Heartbeat Ping
+    Navbar -->|"Heartbeat Ping (15s)"| ApiClient
+    ApiClient -->|"GET /health"| ViteProxy
+    ViteProxy --> HealthEndpoint
+
+    classDef implemented fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#f0fdf4;
+    classDef planned fill:#1e293b,stroke:#64748b,stroke-width:1px,stroke-dasharray: 4 4,color:#94a3b8;
+

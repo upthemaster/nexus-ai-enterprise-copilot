@@ -1,0 +1,67 @@
+sequenceDiagram
+    autonumber
+    actor Client as API Client / Caller
+    participant Route as Endpoint (documents.py)
+    participant Service as DocumentService (document_service.py)
+    participant Validator as Validator (validator.py)
+    participant Storage as Upload Storage (data/uploads/)
+    participant Extractor as Extractor (extractor.py)
+    participant Handler as Exception Handler (main.py)
+
+    Note over Client, Route: Initiating Multipart Upload
+    Client->>Route: POST /api/v1/documents/upload (Multipart file)
+    Route->>Service: process_document_upload(UploadFile)
+
+    %% Step 1: Filename validation
+    Service->>Validator: sanitize_and_validate_filename(filename)
+    alt Path traversal detected or unsupported extension
+        Validator-->>Service: raise PathTraversalError / UnsupportedFileTypeError
+        Service-->>Handler: Exception propagates
+        Handler-->>Client: HTTP 400/415 JSON (Sanitized error)
+    else Filename is clean & extension whitelisted
+        Validator-->>Service: (clean_filename, extension)
+    end
+
+    %% Step 2: Stream read & size enforcement
+    Service->>Validator: read_and_validate_file_stream(file, max_size)
+    alt Exceeds MAX_FILE_SIZE_MB during streaming
+        Validator-->>Service: raise FileTooLargeError (abort reading)
+        Service-->>Handler: Exception propagates
+        Handler-->>Client: HTTP 413 Payload Too Large
+    else 0-byte empty file
+        Validator-->>Service: raise EmptyDocumentError
+        Service-->>Handler: Exception propagates
+        Handler-->>Client: HTTP 400 Empty Document
+    else Valid size within limit
+        Validator-->>Service: content_bytes
+    end
+
+    %% Step 3: Magic byte signature check
+    Service->>Validator: validate_file_signature(header_bytes, extension)
+    alt Disguised binary / signature mismatch
+        Validator-->>Service: raise InvalidFileSignatureError
+        Service-->>Handler: Exception propagates
+        Handler-->>Client: HTTP 400 Invalid File Signature
+    else Signature matches extension
+        Validator-->>Service: Signature OK
+    end
+
+    %% Step 4: Safe disk storage
+    Note over Service, Storage: Assign UUID & store safely
+    Service->>Storage: write(document_id.extension, content_bytes)
+    Storage-->>Service: File written
+
+    %% Step 5: Format extraction
+    Service->>Extractor: extract_document_text(content_bytes, extension)
+    alt Corrupt binary / parser failure
+        Extractor-->>Service: raise CorruptedFileError
+        Service-->>Handler: Exception propagates
+        Handler-->>Client: HTTP 422 Unprocessable Entity
+    else Successful parsing
+        Extractor-->>Service: (extracted_pages, warnings)
+    end
+
+    %% Step 6: Response assembly
+    Service-->>Route: DocumentUploadResponse(document_id, pages, chars, warnings)
+    Route-->>Client: HTTP 200 OK (Structured JSON response)
+

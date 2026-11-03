@@ -1,0 +1,87 @@
+flowchart TD
+    %% Day 6: LangGraph Multi-Step Workflow & Query Routing Architecture
+
+    subgraph WorkflowEntry ["Workflow Entrypoint (app/api/v1/endpoints/workflows.py)"]
+        UserReq["User Request: POST /api/v1/workflows/run\n(query, document_id, workflow_type)"]:::entry
+        StartNode(["START"]):::entry
+    end
+
+    subgraph IntentRoutingSubsystem ["1. Intent Classification & Routing Node"]
+        ClassifyNode["classify_query_node\n(app/workflows/graph.py)\n- Checks requested_workflow_type\n- Heuristic keywords: summarize, risk, qa"]:::routing
+        RouteDecision{"route_decision()\nConditional Edge"}:::decision
+    end
+
+    subgraph QABranchSubsystem ["Branch 1: Document Q&A Workflow"]
+        RetrieveRerankNode["retrieve_and_rerank_node\n- tool_hybrid_search(query, top_k)\n- CrossEncoderReranker scoring"]:::qa
+        EvidenceCheck{"check_evidence_decision()\npassages exist &\ntop_score >= -6.0?"}:::decision
+        AbstainNode["abstain_qa_node\n- Explict abstention message\n- insufficient_evidence: true\n- citations: []"]:::abstain
+        GenerateQANode["generate_qa_node\n- format_context_prompt()\n- LLMProvider.generate()"]:::qa
+        ValidateCitationsNode["validate_citations_node\n- CitationService.validate_citations()\n- Detect direct quotes\n- Enrich chunk metadata"]:::qa
+    end
+
+    subgraph SummarizeBranchSubsystem ["Branch 2: Document Summarization Workflow"]
+        LoadSummaryNode["load_document_summary_node\n- tool_load_document_chunks(doc_id)\n- Sequential chunk order (0..N)"]:::summary
+        SummarizeNode["summarize_with_evidence_node\n- format_summarization_prompt()\n- Structured Sections: Exec Summary,\n  Key Findings, Action Items\n- Citation validation"]:::summary
+    end
+
+    subgraph RiskBranchSubsystem ["Branch 3: Structured Risk Extraction Workflow"]
+        LoadRisksNode["load_document_risks_node\n- tool_load_document_chunks(doc_id)\n- Target policy & compliance passages"]:::risk
+        RiskAnalysisNode["structured_risk_analysis_node\n- format_risk_extraction_prompt()\n- Structured RiskItems:\n  Category, Severity, Mitigation\n- Citation validation"]:::risk
+    end
+
+    subgraph ConvergenceSubsystem ["Convergence & Terminal Output"]
+        FormatResponseNode["format_response_node\n- Standardizes WorkflowResponse\n- Appends route tracing log\n- Computes latency timing_ms"]:::convergence
+        EndNode(["END"]):::entry
+    end
+
+    subgraph ToolSandbox ["Controlled Bounded Tool Sandbox (app/workflows/tools.py)"]
+        ToolHybrid["tool_hybrid_search()\n[Read-Only Hybrid Retrieval]"]:::tool
+        ToolLoadDoc["tool_load_document_chunks()\n[Read-Only Sequential Chunk Inspection]"]:::tool
+        ToolInspectChunk["tool_inspect_chunk()\n[Read-Only Single Chunk Inspection]"]:::tool
+    end
+
+    %% Connections
+    UserReq --> StartNode
+    StartNode --> ClassifyNode
+    ClassifyNode --> RouteDecision
+
+    %% Routing Decisions
+    RouteDecision -->|"workflow_type == 'qa'"| RetrieveRerankNode
+    RouteDecision -->|"workflow_type == 'summarize'"| LoadSummaryNode
+    RouteDecision -->|"workflow_type == 'extract_risks'"| LoadRisksNode
+
+    %% Q&A Branch Flow
+    RetrieveRerankNode --> EvidenceCheck
+    EvidenceCheck -->|"Sufficient Evidence (score >= -6.0)"| GenerateQANode
+    EvidenceCheck -->|"Insufficient Evidence (score < -6.0)"| AbstainNode
+    GenerateQANode --> ValidateCitationsNode
+    ValidateCitationsNode --> FormatResponseNode
+    AbstainNode --> FormatResponseNode
+
+    %% Summarization Branch Flow
+    LoadSummaryNode --> SummarizeNode
+    SummarizeNode --> FormatResponseNode
+
+    %% Risk Extraction Branch Flow
+    LoadRisksNode --> RiskAnalysisNode
+    RiskAnalysisNode --> FormatResponseNode
+
+    %% Terminal Edge
+    FormatResponseNode --> EndNode
+
+    %% Tool Sandbox Invocations
+    RetrieveRerankNode -.-> ToolHybrid
+    LoadSummaryNode -.-> ToolLoadDoc
+    LoadRisksNode -.-> ToolLoadDoc
+
+    %% Styling
+    classDef entry fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#ffffff;
+    classDef routing fill:#8e44ad,stroke:#7d3c98,stroke-width:2px,color:#ffffff;
+    classDef decision fill:#f39c12,stroke:#d68910,stroke-width:2px,color:#ffffff;
+    classDef qa fill:#2980b9,stroke:#2471a3,stroke-width:2px,color:#ffffff;
+    classDef abstain fill:#c0392b,stroke:#a93226,stroke-width:2px,color:#ffffff;
+    classDef summary fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+    classDef risk fill:#d35400,stroke:#ba4a00,stroke-width:2px,color:#ffffff;
+    classDef convergence fill:#16a085,stroke:#117864,stroke-width:2px,color:#ffffff;
+    classDef tool fill:#fcf3cf,stroke:#f1c40f,stroke-width:1px,stroke-dasharray: 4 4,color:#7d6608;
+

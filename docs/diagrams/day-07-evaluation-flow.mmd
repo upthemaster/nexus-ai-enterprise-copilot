@@ -1,0 +1,66 @@
+flowchart TD
+    %% Day 7 Automated Evaluation & Retrieval Ablation Architecture Flow
+
+    subgraph GoldenDatasetSection ["1. Versioned Golden Dataset & Corpus"]
+        DatasetFile[("v1.jsonl<br/>25 Enterprise Queries<br/>across 5 Question Types")]:::corpus
+        CorpusDocs[("Reference Corpus<br/>4 Policy & SRE Docs<br/>15 Ground-Truth Chunks")]:::corpus
+        CorpusSeeder["Corpus Seeder<br/>(app/evaluation/dataset.py)"]:::engine
+        DualIndex["Dual Indexing Engine<br/>VectorStore (Chroma) + BM25"]:::engine
+    end
+
+    subgraph AblationEngine ["2. 4-Way Retrieval Ablation Pipeline"]
+        direction TB
+        Config1["Config 1: Dense Vector-Only<br/>ChromaDB cosine (all-MiniLM-L6-v2)"]:::config
+        Config2["Config 2: Sparse BM25-Only<br/>Lucene-smoothed BM25 (code tokens)"]:::config
+        Config3["Config 3: Hybrid RRF<br/>Reciprocal Rank Fusion (k=60)"]:::config
+        Config4["Config 4: Hybrid + Cross-Encoder<br/>ms-marco-MiniLM-L-6-v2 Reranker"]:::config
+    end
+
+    subgraph ExecutionLayer ["3. Benchmark Execution & Scoring Engine"]
+        Runner["BenchmarkRunner<br/>(app/evaluation/benchmarks.py)"]:::engine
+        GroundedGen["Grounded Generation & Gate<br/>Prompt Container + Mock/Gemini LLM"]:::engine
+        CitationVal["Citation Validation<br/>(app/services/citation_service.py)"]:::engine
+    end
+
+    subgraph MetricsSubsystem ["4. Mathematical Metrics Calculation Engine"]
+        RetrievalMetricsNode["Retrieval Metrics:<br/>• Recall@1, Recall@3, Recall@5<br/>• Hit@1, Hit@3, Hit@5<br/>• Mean Reciprocal Rank (MRR)<br/>• Context Precision (MAP@K)<br/>• Context Recall"]:::metric
+        GenerationMetricsNode["Generation & Safety Metrics:<br/>• Faithfulness (Claim Support Ratio)<br/>• Citation Precision & Recall<br/>• Verbatim Quote Ratio (rolling n-gram)<br/>• Abstention Accuracy (negative queries)"]:::metric
+        OperationalMetricsNode["Operational Metrics:<br/>• Latency Percentiles (P50, P90, P95, Mean)<br/>• Estimated Token Overhead & Cost"]:::metric
+    end
+
+    subgraph PersistenceAndAPI ["5. Service & Delivery Layer"]
+        EvalService["EvaluationService<br/>(app/services/evaluation_service.py)"]:::engine
+        RunStorage[("Persistent Run JSONs<br/>data/eval_runs/*.json")]:::storage
+        APIEndpoints["REST API Endpoints<br/>POST /api/v1/evaluation/run<br/>GET /api/v1/evaluation/ablation<br/>GET /api/v1/evaluation/runs/{id}"]:::api
+    end
+
+    %% Wiring
+    CorpusDocs --> CorpusSeeder --> DualIndex
+    DatasetFile --> Runner
+    DualIndex --> AblationEngine
+
+    Runner --> Config1
+    Runner --> Config2
+    Runner --> Config3
+    Runner --> Config4
+
+    Config1 --> RetrievalMetricsNode
+    Config2 --> RetrievalMetricsNode
+    Config3 --> RetrievalMetricsNode
+    Config4 --> GroundedGen
+
+    GroundedGen --> CitationVal --> GenerationMetricsNode
+    Runner --> OperationalMetricsNode
+
+    RetrievalMetricsNode & GenerationMetricsNode & OperationalMetricsNode --> EvalService
+    EvalService --> RunStorage
+    EvalService <--> APIEndpoints
+
+    %% Styling
+    classDef corpus fill:#e8f8f5,stroke:#1abc9c,stroke-width:2px,color:#16a085;
+    classDef engine fill:#eaf2f8,stroke:#2980b9,stroke-width:2px,color:#1b4f72;
+    classDef config fill:#fef9e7,stroke:#f39c12,stroke-width:2px,color:#7d6608;
+    classDef metric fill:#f4ecf7,stroke:#8e44ad,stroke-width:2px,color:#512e5f;
+    classDef storage fill:#fbeee6,stroke:#e67e22,stroke-width:2px,color:#784212;
+    classDef api fill:#e8f6f3,stroke:#27ae60,stroke-width:2px,color:#1e8449;
+

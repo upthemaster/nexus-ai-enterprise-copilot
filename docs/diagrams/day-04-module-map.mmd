@@ -1,0 +1,56 @@
+flowchart LR
+    classDef route fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef service fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef retrieval fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef gen fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F;
+    classDef schema fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C;
+    classDef config fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#263238;
+
+    subgraph APIEndpoints ["API Routes Layer"]
+        HealthRoute["GET /api/v1/health<br/>[IMPLEMENTED]"]:::route
+        UploadRoute["POST /api/v1/documents/upload<br/>[IMPLEMENTED]"]:::route
+        SearchRoute["POST /api/v1/search/*<br/>(vector, bm25, hybrid)<br/>[IMPLEMENTED]"]:::route
+        ChatRoute["POST /api/v1/chat<br/>[IMPLEMENTED]"]:::route
+    end
+
+    subgraph ServiceLayer ["Service Orchestration Layer"]
+        DocService["DocumentService<br/>[IMPLEMENTED]"]:::service
+        IndexService["IndexingService<br/>[IMPLEMENTED]"]:::service
+        ChatService["ChatService<br/>[IMPLEMENTED]"]:::service
+    end
+
+    subgraph RetrievalLayer ["Retrieval & Reranking Layer"]
+        VecStore["ChromaVectorStore<br/>[IMPLEMENTED]"]:::retrieval
+        BM25Store["BM25IndexManager<br/>[IMPLEMENTED]"]:::retrieval
+        HybridRetriever["HybridRetriever (RRF)<br/>[IMPLEMENTED]"]:::retrieval
+        Reranker["CrossEncoderReranker<br/>(ms-marco-MiniLM)<br/>[IMPLEMENTED]"]:::retrieval
+    end
+
+    subgraph GenerationLayer ["Generation & Provider Layer"]
+        PromptEngine["Grounded Prompts & XML<br/>[IMPLEMENTED]"]:::gen
+        BaseProvider["BaseLLMProvider (ABC)<br/>[IMPLEMENTED]"]:::gen
+        GeminiAdapter["GeminiProvider<br/>[IMPLEMENTED]"]:::gen
+        OpenAIAdapter["OpenAICompatibleProvider<br/>[IMPLEMENTED]"]:::gen
+        MockAdapter["MockLLMProvider<br/>[IMPLEMENTED]"]:::gen
+    end
+
+    subgraph SchemasLayer ["Pydantic Data Schemas"]
+        ChatSchema["ChatRequest / ChatResponse<br/>Citation / RerankedPassage<br/>[IMPLEMENTED]"]:::schema
+        SearchSchema["HybridSearchRequest/Response<br/>RetrievalDebugInfo<br/>[IMPLEMENTED]"]:::schema
+    end
+
+    subgraph CoreConfig ["Core Settings"]
+        Settings["Settings (.env.example)<br/>RERANKER_MODEL_NAME<br/>LLM_PROVIDER<br/>EVIDENCE_MIN_SCORE<br/>[IMPLEMENTED]"]:::config
+    end
+
+    ChatRoute --> ChatService
+    ChatService --> HybridRetriever
+    ChatService --> Reranker
+    ChatService --> PromptEngine
+    ChatService --> BaseProvider
+    BaseProvider -.-> GeminiAdapter & OpenAIAdapter & MockAdapter
+    ChatService --> ChatSchema
+    ChatRoute --> ChatSchema
+    Reranker --> Settings
+    BaseProvider --> Settings
+

@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    actor Client as API Client / Caller
+    participant Endpoint as Search Endpoint (POST /search/hybrid)
+    participant IndexService as IndexingService
+    participant Retriever as HybridRetriever
+    participant Embedder as EmbeddingService (all-MiniLM-L6-v2)
+    participant VectorStore as VectorStoreManager (ChromaDB)
+    participant BM25 as BM25IndexManager (LuceneBM25)
+    participant RRF as Reciprocal Rank Fusion Engine
+
+    Client->>Endpoint: POST /api/v1/search/hybrid {query, top_k=5, candidate_multiplier=2}
+    Endpoint->>IndexService: search_hybrid(query, top_k=5, candidate_multiplier=2)
+    IndexService->>Retriever: retrieve(query, top_k=5, candidate_multiplier=2)
+
+    Note over Retriever: candidate_k = min(50, top_k * multiplier) = 10
+
+    par Dense Vector Search Branch
+        Retriever->>Embedder: embed_query(query)
+        Embedder-->>Retriever: query_embedding (384d vector)
+        Retriever->>VectorStore: query_similar(query_embedding, top_k=10)
+        VectorStore-->>Retriever: vector_candidates (ranked 1..10 with cosine scores)
+    and Sparse BM25 Keyword Branch
+        Retriever->>BM25: query(query, top_k=10)
+        Note over BM25: Tokenize & score via LuceneBM25
+        BM25-->>Retriever: bm25_candidates (ranked 1..10 with BM25 scores)
+    end
+
+    Note over Retriever, RRF: Step 4: Reciprocal Rank Fusion (k=60)
+    Retriever->>RRF: compute_rrf(vector_candidates, bm25_candidates)
+    loop For each candidate chunk d
+        Note over RRF: RRF(d) = sum(1 / (60 + rank_m(d)))
+        Note over RRF: Attach Debug: vector_rank, vector_score, bm25_rank, bm25_score
+    end
+    RRF-->>Retriever: sorted_candidates (by descending RRF score)
+
+    Note over Retriever: Slice to top_k = 5
+    Retriever-->>IndexService: List[HybridSearchResultItem]
+    IndexService-->>Endpoint: HybridSearchResponse
+    Endpoint-->>Client: HTTP 200 OK (Ranked Fused Results + Debug Metadata)
+

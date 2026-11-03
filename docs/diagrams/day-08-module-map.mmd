@@ -1,0 +1,113 @@
+classDiagram
+    %% Day 8 Frontend Module Map & Class Diagram
+    %% Solid nodes: IMPLEMENTED
+    %% Dashed nodes: PLANNED
+
+    class App {
+        <<React Functional Component>>
+        +activeTab: ActiveTab
+        +activeCitation: CitationItem
+        +render()
+    }
+
+    class Navbar {
+        <<React Functional Component>>
+        +online: boolean
+        +pingMs: number
+        +onTabChange(tab: ActiveTab)
+        +checkHeartbeat()
+    }
+
+    class DashboardView {
+        <<React Functional Component>>
+        +documents: DocumentSummaryItem[]
+        +conversations: ConversationItem[]
+        +totalChunks: number
+        +onNavigate(tab: ActiveTab)
+    }
+
+    class DocumentsView {
+        <<React Functional Component>>
+        +documents: DocumentSummaryItem[]
+        +uploading: boolean
+        +handleFileUpload(file: File)
+        +handleSummarize(id: string)
+        +handleExtractRisks(id: string)
+        +handleDelete(id: string)
+    }
+
+    class ChatView {
+        <<React Functional Component>>
+        +conversations: ConversationItem[]
+        +activeConvId: string
+        +messages: ConversationMessage[]
+        +workflowType: WorkflowType
+        +topK: number
+        +handleSendMessage(query: string)
+        +handleCreateNewChat()
+    }
+
+    class EvaluationView {
+        <<React Functional Component>>
+        +ablationData: AblationComparisonResponse
+        +historicalRuns: EvaluationRunSummary[]
+        +handleRunAblation()
+        +handleRunBenchmark()
+    }
+
+    class SettingsView {
+        <<React Functional Component>>
+        +renderRuntimeConfig()
+        +renderGuardrails()
+    }
+
+    class SourceInspectorModal {
+        <<React Functional Component>>
+        +citation: CitationItem
+        +details: CitationSourceDetails
+        +copied: boolean
+        +handleCopy()
+        +onClose()
+    }
+
+    class ApiClient {
+        <<TypeScript Singleton>>
+        +getHealth() Promise~HealthResponse~
+        +listDocuments() Promise~DocumentListResponse~
+        +uploadDocument(file) Promise~DocumentUploadResponse~
+        +deleteDocument(id) Promise
+        +askChat(payload) Promise~ChatResponse~
+        +runWorkflow(payload) Promise~WorkflowRunResponse~
+        +getCitationSource(chunk_id) Promise~CitationSourceDetails~
+        +listConversations() Promise~ConversationItem[]~
+        +getAblationComparison() Promise~AblationComparisonResponse~
+    }
+
+    class ApiTypes {
+        <<TypeScript Interfaces>>
+        +HealthResponse
+        +DocumentSummaryItem
+        +DocumentUploadResponse
+        +CitationItem
+        +ChatResponse
+        +WorkflowRunResponse
+        +AblationComparisonResponse
+    }
+
+    App --> Navbar : renders
+    App --> DashboardView : renders
+    App --> DocumentsView : renders
+    App --> ChatView : renders
+    App --> EvaluationView : renders
+    App --> SettingsView : renders
+    App --> SourceInspectorModal : renders
+
+    DashboardView ..> ApiClient : calls
+    DocumentsView ..> ApiClient : calls
+    ChatView ..> ApiClient : calls
+    EvaluationView ..> ApiClient : calls
+    SourceInspectorModal ..> ApiClient : calls
+    Navbar ..> ApiClient : calls
+
+    ApiClient ..> ApiTypes : uses
+

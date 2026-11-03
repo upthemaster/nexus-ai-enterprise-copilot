@@ -1,0 +1,70 @@
+classDiagram
+    %% NexusAI Day 10 Module Map & Final Delivery Architecture
+    %% Solid nodes: ALL IMPLEMENTED
+
+    class DemoSampleCorpus {
+        +enterprise_security_travel_policy.pdf
+        +vendor_master_services_agreement.docx
+        +cloud_infrastructure_sla.txt
+        +extract_text_and_validate()
+    }
+
+    class DemonstrationRunbook {
+        +Scenario_1_Ingestion_and_Catalog()
+        +Scenario_2_Grounded_QA_and_Sidecar()
+        +Scenario_3_Contextual_Multiturn()
+        +Scenario_4_Executive_Summary()
+        +Scenario_5_Risk_Extraction()
+        +Scenario_6_Negative_Abstention()
+        +Scenario_7_Ablation_Benchmark()
+    }
+
+    class AutomatedRunbookTest {
+        +test_complete_demo_runbook_scenarios()
+        +assert_upload_success()
+        +assert_grounded_answer_and_citations()
+        +assert_sidecar_text_inspection()
+        +assert_multiturn_followup()
+        +assert_summarization_workflow()
+        +assert_risk_extraction_workflow()
+        +assert_negative_abstention_refusal()
+        +assert_4_way_ablation_configs()
+    }
+
+    class EvaluationBenchmarkReport {
+        +Dataset_v1_25_items()
+        +Vector_Only_Recall_0_7733()
+        +BM25_Only_Recall_0_7733()
+        +Hybrid_RRF_Recall_0_7867()
+        +Hybrid_Rerank_Recall_0_8000()
+        +Context_Precision_0_7649()
+        +Answerable_Hit_5_100_percent()
+        +P50_P95_Latencies()
+    }
+
+    class DefinitionOfDoneAudit {
+        +Product_Functionality_7_of_7_Pass()
+        +GenAI_Engineering_6_of_6_Pass()
+        +Evaluation_Methodology_5_of_5_Pass()
+        +Engineering_Delivery_4_of_4_Pass()
+        +Total_22_of_22_Verified()
+    }
+
+    class PortfolioPackage {
+        +Blueprint_Section_19_1_Resume_Bullets()
+        +Five_Minute_Architectural_Walkthrough()
+        +Why_Hybrid_Retrieval_Defense()
+        +Why_RRF_Ordinal_Fusion_Defense()
+        +Why_Cross_Encoder_Reranker_Defense()
+        +Why_LangGraph_Explicit_DAG_Defense()
+        +Why_CPU_Optimized_PyTorch_Defense()
+    }
+
+    DemonstrationRunbook --> DemoSampleCorpus : utilizes
+    AutomatedRunbookTest --> DemonstrationRunbook : verifies programmatically
+    AutomatedRunbookTest --> DemoSampleCorpus : ingests
+    EvaluationBenchmarkReport ..> DemonstrationRunbook : provides empirical evidence
+    DefinitionOfDoneAudit --> AutomatedRunbookTest : confirms passing
+    PortfolioPackage --> EvaluationBenchmarkReport : cites empirical metrics
+    PortfolioPackage --> DefinitionOfDoneAudit : references 100% compliance
+

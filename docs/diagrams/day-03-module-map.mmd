@@ -1,0 +1,128 @@
+flowchart TD
+    %% NexusAI Day 3 Backend Module Map & Dependency Flow
+    %% Matches real implementation files on disk
+
+    subgraph CoreModule ["core/ (Configuration & Errors)"]
+        Config["core/config.py\n(RRF_K, BM25_PERSIST_PATH, Chroma)"]:::core
+        Errors["core/errors.py\n(NexusBaseException & handlers)"]:::core
+    end
+
+    subgraph SchemasModule ["schemas/ (Data Contracts)"]
+        HealthSchema["schemas/health.py\n(HealthResponse)"]:::schema
+        DocSchema["schemas/document.py\n(DocumentUploadResponse, PageExtraction)"]:::schema
+        ChunkSchema["schemas/chunk.py\n(ChunkMetadata, DocumentChunk)"]:::schema
+        SearchSchema["schemas/search.py\n(HybridSearch, BM25Search, RetrievalDebugInfo)"]:::schema
+    end
+
+    subgraph IngestionModule ["ingestion/ (Extraction & Chunking)"]
+        Validator["ingestion/validator.py\n(Size, Signature, Traversal)"]:::ingestion
+        Extractor["ingestion/extractor.py\n(pypdf, python-docx, text)"]:::ingestion
+        Chunker["ingestion/chunker.py\n(RecursiveTextSplitter, content_hash)"]:::ingestion
+    end
+
+    subgraph RetrievalModule ["retrieval/ (Dense & Sparse Retrieval Layer)"]
+        Embeddings["retrieval/embeddings.py\n(SentenceTransformer all-MiniLM-L6-v2)"]:::retrieval
+        VectorStore["retrieval/vector_store.py\n(ChromaDB PersistentClient)"]:::retrieval
+        BM25Index["retrieval/bm25_index.py\n(LuceneBM25, Tokenizer, Disk Persistence)"]:::retrieval
+        HybridRetriever["retrieval/hybrid.py\n(Reciprocal Rank Fusion RRF Engine)"]:::retrieval
+    end
+
+    subgraph ServicesModule ["services/ (Domain Orchestration)"]
+        DocService["services/document_service.py\n(Upload, validation, extraction)"]:::service
+        IndexService["services/indexing_service.py\n(Dual-indexing, vector, bm25, hybrid)"]:::service
+    end
+
+    subgraph APIModule ["api/v1/ (HTTP Transport)"]
+        HealthEndpoint["api/v1/endpoints/health.py\n(GET /api/v1/health)"]:::api
+        DocEndpoint["api/v1/endpoints/documents.py\n(POST /api/v1/documents/upload)"]:::api
+        SearchEndpoint["api/v1/endpoints/search.py\n(POST /vector, /bm25, /hybrid)"]:::api
+        V1Router["api/v1/router.py\n(APIRouter aggregation)"]:::api
+    end
+
+    subgraph MainApp ["app/ (Application Lifecycle & Safety)"]
+        Main["main.py\n(FastAPI app, Lifespan, Sanitized Handlers)"]:::main
+    end
+
+    subgraph TestSuite ["tests/ (Automated Quality Gate - 25 Tests)"]
+        Conftest["tests/conftest.py\n(Chroma & BM25 isolation)"]:::test
+        TestHealth["tests/test_health.py"]:::test
+        TestUpload["tests/test_upload.py"]:::test
+        TestChunker["tests/test_chunker.py"]:::test
+        TestVectorStore["tests/test_vector_store.py"]:::test
+        TestBM25["tests/test_bm25.py"]:::test
+        TestHybrid["tests/test_hybrid.py"]:::test
+    end
+
+    %% Wiring
+    Main --> V1Router
+    Main --> Config
+    Main --> Errors
+
+    V1Router --> HealthEndpoint
+    V1Router --> DocEndpoint
+    V1Router --> SearchEndpoint
+
+    HealthEndpoint --> HealthSchema
+    DocEndpoint --> DocSchema
+    DocEndpoint --> DocService
+    SearchEndpoint --> ChunkSchema
+    SearchEndpoint --> SearchSchema
+    SearchEndpoint --> IndexService
+
+    DocService --> Validator
+    DocService --> Extractor
+    DocService --> IndexService
+    DocService --> DocSchema
+    DocService --> Config
+
+    IndexService --> Chunker
+    IndexService --> Embeddings
+    IndexService --> VectorStore
+    IndexService --> BM25Index
+    IndexService --> HybridRetriever
+    IndexService --> SearchSchema
+
+    HybridRetriever --> VectorStore
+    HybridRetriever --> BM25Index
+    HybridRetriever --> Embeddings
+    HybridRetriever --> SearchSchema
+    HybridRetriever --> Config
+
+    Chunker --> ChunkSchema
+    Chunker --> DocSchema
+    Chunker --> Config
+
+    Embeddings --> Config
+    VectorStore --> Config
+    VectorStore --> ChunkSchema
+    BM25Index --> Config
+    BM25Index --> ChunkSchema
+    BM25Index --> SearchSchema
+
+    Validator --> Config
+    Validator --> Errors
+    Extractor --> Errors
+    Extractor --> DocSchema
+
+    %% Test wiring
+    Conftest --> Main
+    Conftest --> Config
+    Conftest --> VectorStore
+    Conftest --> BM25Index
+    TestHealth --> Conftest
+    TestUpload --> Conftest
+    TestChunker --> Conftest
+    TestVectorStore --> Conftest
+    TestBM25 --> Conftest
+    TestHybrid --> Conftest
+
+    %% Styling
+    classDef main fill:#2c3e50,stroke:#1a252f,stroke-width:2px,color:#ffffff;
+    classDef api fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#ffffff;
+    classDef service fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#ffffff;
+    classDef ingestion fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#ffffff;
+    classDef retrieval fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#ffffff;
+    classDef schema fill:#1abc9c,stroke:#16a085,stroke-width:2px,color:#ffffff;
+    classDef core fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#ffffff;
+    classDef test fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+

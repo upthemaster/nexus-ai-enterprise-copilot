@@ -1,0 +1,14 @@
+Cloud Infrastructure & Production SRE Runbook (SRE-OPS-2026)
+
+Section 1: Database High Availability & Disaster Recovery
+Production Aurora PostgreSQL clusters utilize automated multi-AZ replication across 3 Availability Zones under failover standard DB-FAILOVER-2. Recovery Point Objective (RPO) is guaranteed at 5 minutes, and Recovery Time Objective (RTO) is guaranteed at 15 minutes.
+
+Section 2: Incident Severity & Paging Thresholds
+System alert INC-991 triggers automated on-call PagerDuty escalation when the API error rate exceeds 5% continuously for 3 consecutive minutes. P1 incidents mandate initiating a bridge within 10 minutes.
+
+Section 3: Microservice Error Diagnostics
+Error code ERR-9021 designates an upstream API gateway timeout or rate limiter exhaustion. Microservice clients receiving ERR-9021 must execute exponential backoff with full jitter and a base interval of 200 milliseconds.
+
+Section 4: Storage Backup & Snapshot Retention
+Automated EBS volume snapshots run daily at 02:00 UTC and are retained for 30 days. Monthly cold archive snapshots are migrated to AWS Glacier with a strict 365-day retention lifecycle.
+

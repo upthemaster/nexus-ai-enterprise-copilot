@@ -1,0 +1,56 @@
+NEXUSAI CLOUD INFRASTRUCTURE SERVICE LEVEL AGREEMENT (SLA)
+Document ID: SLA-CLOUD-2026-V2
+Effective Date: January 1, 2026
+Classification: Enterprise Internal / Customer Facing
+
+1. SERVICE COMMITMENT & AVAILABILITY
+NexusAI Cloud commits to providing 99.95% Monthly Uptime Percentage for all production compute and vector search clusters.
+Monthly Uptime is calculated as follows:
+Monthly Uptime % = (Total Minutes in Month - Total Downtime Minutes) / Total Minutes in Month * 100%
+
+Scheduled maintenance conducted during standard maintenance windows (Sundays 02:00 to 04:00 UTC) with at least 5 business days advance notice is excluded from downtime calculations.
+
+2. INCIDENT SEVERITY CLASSIFICATION & RESPONSE TIMES
+The NexusAI Cloud Site Reliability Engineering (SRE) team operates 24/7/365 with the following target response and resolution times:
+
+- Priority 1 (P1 - Critical Outage):
+  Definition: Complete service unavailability affecting all or a majority of production users. Data corruption or security perimeter breach.
+  Response SLA: Within 15 minutes.
+  Status Updates: Every 30 minutes until full resolution.
+  Target Resolution SLA: Within 4 hours.
+
+- Priority 2 (P2 - Major Degradation):
+  Definition: Significant service impairment or partial outage (e.g. vector indexing latency > 10s, hybrid retrieval degraded). Core functions usable with workaround.
+  Response SLA: Within 1 hour.
+  Status Updates: Every 2 hours.
+  Target Resolution SLA: Within 8 hours.
+
+- Priority 3 (P3 - Minor Issue):
+  Definition: Non-critical bug or minor feature defect affecting limited users with minimal business impact.
+  Response SLA: Within 4 business hours.
+  Target Resolution SLA: Next scheduled release or 5 business days.
+
+- Priority 4 (P4 - Informational / Enhancement):
+  Definition: General inquiries, administrative requests, or feature enhancement proposals.
+  Response SLA: Within 24 business hours.
+
+3. SERVICE LEVEL CREDITS
+In the event that NexusAI Cloud fails to meet the 99.95% uptime commitment during any calendar month, the customer is eligible for Service Credits:
+- Monthly Uptime between 99.0% and 99.95%: 10% Service Credit applied to monthly invoice.
+- Monthly Uptime between 95.0% and 99.0%: 25% Service Credit applied to monthly invoice.
+- Monthly Uptime below 95.0%: 50% Service Credit applied to monthly invoice.
+
+To claim a Service Credit, the customer must submit an SLA claim ticket to sla-claims@nexusai.enterprise within 30 days following the end of the affected billing cycle.
+
+4. DATA BACKUP, RETENTION & DISASTER RECOVERY
+- Recovery Point Objective (RPO): Maximum 15 minutes for relational metadata and vector embeddings.
+- Recovery Time Objective (RTO): Maximum 2 hours for full cross-region failover.
+- Automated snapshots of vector collections and metadata are executed every 6 hours and retained for 30 rolling calendar days.
+- Customer data is encrypted at rest using AES-256 and encrypted in transit using TLS 1.3.
+
+5. ESCALATION PATHWAY
+If a P1 incident is not acknowledged within the 15-minute response window, escalation proceeds automatically:
+- Level 1: Primary On-Call SRE Engineer (Minute 0)
+- Level 2: Engineering Lead / SRE Manager (Minute 15)
+- Level 3: Vice President of Infrastructure & Cloud Operations (Minute 30)
+

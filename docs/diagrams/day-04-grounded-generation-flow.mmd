@@ -1,0 +1,68 @@
+flowchart TD
+    classDef client fill:#E1F5FE,stroke:#0288D1,stroke-width:2px,color:#01579B;
+    classDef retrieval fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#1B5E20;
+    classDef rerank fill:#FFF8E1,stroke:#FFA000,stroke-width:2px,color:#E65100;
+    classDef gate fill:#EDE7F6,stroke:#7E57C2,stroke-width:2px,color:#311B92;
+    classDef gen fill:#FCE4EC,stroke:#D81B60,stroke-width:2px,color:#880E4F;
+    classDef storage fill:#ECEFF1,stroke:#607D8B,stroke-width:2px,color:#263238;
+
+    subgraph ClientLayer ["1. Client Interaction"]
+        Query["User Query: 'What is the meal allowance under POL-402?'"]:::client
+        API["POST /api/v1/chat"]:::client
+    end
+
+    subgraph FirstStage ["2. First-Stage Hybrid Retrieval"]
+        VectorRetriever["ChromaDB Vector Search<br/>(all-MiniLM-L6-v2)"]:::retrieval
+        BM25Retriever["LuceneBM25 Sparse Search<br/>(Identifier Tokenizer)"]:::retrieval
+        RRF["Reciprocal Rank Fusion (RRF)<br/>k = 60"]:::retrieval
+        CandidatePool["Candidate Pool (10–15 Chunks)"]:::retrieval
+    end
+
+    subgraph SecondStage ["3. Second-Stage Neural Reranking"]
+        Pairs["Construct (Query, Passage) Pairs"]:::rerank
+        CrossEncoder["CrossEncoder Model<br/>(ms-marco-MiniLM-L-6-v2)<br/>Joint Self-Attention"]:::rerank
+        ScoredPassages["Sorted Reranked Passages<br/>(Top 3 Chunks with Logits)"]:::rerank
+    end
+
+    subgraph SufficiencyGate ["4. Evidence Sufficiency & Abstention Gate"]
+        CheckConfidence{"Top Score &ge; -6.0<br/>AND Chunks > 0?"}:::gate
+        AbstainResponse["Return Explicit Abstention:<br/>'The available documents do not provide<br/>enough information to answer this question.'<br/>insufficient_evidence: true"]:::gate
+    end
+
+    subgraph GenerationStage ["5. Pluggable Grounded Generation"]
+        FormatPrompt["Format Delimited XML Context<br/>&lt;context&gt;&lt;chunk id='...'&gt;...&lt;/chunk&gt;&lt;/context&gt;<br/>Sanitize XML Breakouts"]:::gen
+        ProviderFactory["LLM Provider Adapter Factory<br/>(get_llm_provider)"]:::gen
+        GeminiAdapter["GeminiProvider<br/>(gemini-2.5-flash)"]:::gen
+        OpenAIAdapter["OpenAICompatibleProvider<br/>(vLLM / Ollama)"]:::gen
+        MockAdapter["MockLLMProvider<br/>(Deterministic Offline CI)"]:::gen
+        LLMOutput["Raw Completion Text + [chunk_id] Tags"]:::gen
+    end
+
+    subgraph ValidationStage ["6. Server-Side Citation Validation"]
+        ExtractTags["Extract [chunk_id] Tags"]:::storage
+        VerifyChunk{"Chunk ID Exists in<br/>Retrieved Context?"}:::storage
+        KeepCitation["Attach Validated Citation<br/>(document_id, filename, page, snippet)"]:::storage
+        DropCitation["Discard / Flag Fabricated ID"]:::storage
+        FinalResponse["Structured ChatResponse<br/>(Answer, Citations, Timings)"]:::client
+    end
+
+    Query --> API
+    API --> VectorRetriever & BM25Retriever
+    VectorRetriever & BM25Retriever --> RRF
+    RRF --> CandidatePool
+    CandidatePool --> Pairs
+    Pairs --> CrossEncoder
+    CrossEncoder --> ScoredPassages
+    ScoredPassages --> CheckConfidence
+    CheckConfidence -- "NO (Irrelevant / Empty)" --> AbstainResponse
+    CheckConfidence -- "YES (Sufficient Evidence)" --> FormatPrompt
+    FormatPrompt --> ProviderFactory
+    ProviderFactory -.-> GeminiAdapter & OpenAIAdapter & MockAdapter
+    GeminiAdapter & OpenAIAdapter & MockAdapter --> LLMOutput
+    LLMOutput --> ExtractTags
+    ExtractTags --> VerifyChunk
+    VerifyChunk -- "Valid" --> KeepCitation
+    VerifyChunk -- "Invalid" --> DropCitation
+    KeepCitation & DropCitation --> FinalResponse
+    AbstainResponse --> FinalResponse
+

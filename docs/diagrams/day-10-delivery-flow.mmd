@@ -1,0 +1,46 @@
+flowchart TD
+    %% NexusAI Day 10 Delivery & Demonstration Flow
+    %% Solid nodes: IMPLEMENTED across all 10 Days
+
+    subgraph DemoCorpus ["Curated Enterprise Demo Samples (data/demo_samples/) [IMPLEMENTED]"]
+        DocPDF["enterprise_security_travel_policy.pdf\n- Multi-page compliance\n- PROC-889 $50k limit\n- Per diems & encryption"]:::corpus
+        DocDOCX["vendor_master_services_agreement.docx\n- Vendor legal MSA\n- Net 30, $1M liability cap\n- 30-day cure window"]:::corpus
+        DocTXT["cloud_infrastructure_sla.txt\n- Cloud 99.95% uptime\n- P1-P4 SLAs (P1 < 15m)\n- Credits & escalation"]:::corpus
+    end
+
+    subgraph DemoRunbook ["7 Scripted Demonstration Scenarios (docs/DEMO_RUNBOOK.md) [IMPLEMENTED]"]
+        Scen1["Scenario 1: Multi-Format Document Ingestion\n(Stream validation, chunking, dual-indexing)"]:::runbook
+        Scen2["Scenario 2: Grounded Q&A with Citation Sidecar\n(Exact policy queries, click-to-verify drawer)"]:::runbook
+        Scen3["Scenario 3: Contextual Multi-Turn Conversation\n(Session history, pronoun expansion)"]:::runbook
+        Scen4["Scenario 4: Executive Summarization Workflow\n(Structured Purpose, Provisions, Constraints)"]:::runbook
+        Scen5["Scenario 5: Structured Risk & Liability Extraction\n(High/Medium/Low severity classification)"]:::runbook
+        Scen6["Scenario 6: Negative Abstention Gate\n(Refusal on unmentioned topics, zero hallucination)"]:::runbook
+        Scen7["Scenario 7: Live 4-Way Retrieval Ablation\n(Empirical benchmark comparison from UI)"]:::runbook
+
+        Scen1 --> Scen2 --> Scen3 --> Scen4 --> Scen5 --> Scen6 --> Scen7
+    end
+
+    subgraph AutomatedVerification ["Automated Verification Engine [IMPLEMENTED]"]
+        TestRunbook["backend/tests/test_demo_runbook.py\n(Exercises all 7 scenarios programmatically)"]:::verify
+        FullSuite["pytest backend/tests -v\n(68 / 68 Tests Passing in 31s)"]:::verify
+        BuildVite["npm --prefix frontend run build\n(Vite 6 + TypeScript 5 in 2.46s)"]:::verify
+
+        TestRunbook --> FullSuite
+        FullSuite --> BuildVite
+    end
+
+    subgraph EvaluationAndAudit ["Empirical Evaluation & Delivery Audit [IMPLEMENTED]"]
+        EvalReport["docs/EVALUATION_REPORT.md\n- 25 golden test cases across 5 archetypes\n- 4-way ablation comparative metrics\n- 100% Hit@5 on answerable queries\n- P50/P95 response latencies"]:::audit
+        DoDAudit["docs/DEFINITION_OF_DONE_AUDIT.md\n- 22 / 22 Blueprint Criteria Verified\n- Product, GenAI, Eval, & Delivery"]:::audit
+        PortfolioPkg["docs/PORTFOLIO_PACKAGE.md\n- Section 19.1 compliant resume bullets\n- 5-minute technical architecture script\n- Architectural trade-off defense bank"]:::audit
+    end
+
+    DemoCorpus --> Scen1
+    DemoRunbook --> TestRunbook
+    BuildVite --> EvaluationAndAudit
+
+    classDef corpus fill:#d35400,stroke:#a04000,stroke-width:2px,color:#ffffff;
+    classDef runbook fill:#2980b9,stroke:#1b4f72,stroke-width:2px,color:#ffffff;
+    classDef verify fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+    classDef audit fill:#8e44ad,stroke:#5b2c6f,stroke-width:2px,color:#ffffff;
+

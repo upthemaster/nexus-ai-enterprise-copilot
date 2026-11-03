@@ -1,0 +1,70 @@
+flowchart TD
+    classDef client fill:#E1F5FE,stroke:#0288D1,stroke-width:2px,color:#01579B;
+    classDef db fill:#EDE7F6,stroke:#7E57C2,stroke-width:2px,color:#311B92;
+    classDef ret fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#1B5E20;
+    classDef gen fill:#FFF8E1,stroke:#FFA000,stroke-width:2px,color:#E65100;
+    classDef cite fill:#FCE4EC,stroke:#D81B60,stroke-width:2px,color:#880E4F;
+    classDef storage fill:#ECEFF1,stroke:#607D8B,stroke-width:2px,color:#263238;
+
+    subgraph ClientInteraction ["1. Client Interaction & Dialogue"]
+        UserTurn["User Query + conversation_id<br/>'Who must authorize late submissions?'"]:::client
+        ChatEndpoint["POST /api/v1/chat"]:::client
+        InspectorEndpoint["GET /api/v1/citations/{chunk_id}"]:::client
+    end
+
+    subgraph RelationalDB ["2. Relational Metadata & Session State (SQLite)"]
+        ConversationsTable[("conversations<br/>id, title, timestamps")]:::db
+        MessagesTable[("messages<br/>id, conversation_id, role,<br/>content, citations_json")]:::db
+        HistoryFetch["Load Recent Turns<br/>(Last 4 Messages)"]:::db
+    end
+
+    subgraph Contextualization ["3. Query Contextualization & Two-Stage Retrieval"]
+        Contextualize["Query Contextualizer<br/>Combines previous turn with query"]:::ret
+        HybridSearch["Hybrid Retrieval (RRF k=60)<br/>Dense Vector + Lucene BM25"]:::ret
+        Reranker["Cross-Encoder Reranker<br/>(ms-marco-MiniLM-L-6-v2)"]:::ret
+        Passages["Top Reranked Passages"]:::ret
+    end
+
+    subgraph Generation ["4. Evidence-Grounded Generation"]
+        PromptAssembler["Delimited Prompt Assembler<br/>&lt;conversation_history&gt; + &lt;context&gt;"]:::gen
+        LLMAdapter["Pluggable LLM Provider<br/>(Gemini / OpenAI / Mock)"]:::gen
+        RawCompletion["Raw Answer + [chunk_id] Tags"]:::gen
+    end
+
+    subgraph CitationEngine ["5. Verification & Source Panel Engine"]
+        TagExtractor["Extract [chunk_id] Tags"]:::cite
+        ValidationGate{"Chunk ID in<br/>Retrieved Passages?"}:::cite
+        DiscardTag["Discard / Flag Fabricated ID"]:::cite
+        QuoteDetector["Verbatim Quote Matcher<br/>Rolling N-Gram Window (&ge; 20 chars)"]:::cite
+        SourcePanel["Build SourcePanelItem<br/>is_direct_quote, quote_span, score, snippet"]:::cite
+    end
+
+    subgraph ResponseFlow ["6. Response & Persistence"]
+        SaveTurn["Persist User & Assistant Messages<br/>with Validated Citations in SQLite"]:::db
+        FinalChatResponse["ChatResponse<br/>(answer, citations, source_panel, conversation_id)"]:::client
+        SourceDetails["SourceInspectorResponse<br/>(Full chunk text, page, metadata)"]:::client
+    end
+
+    UserTurn --> ChatEndpoint
+    ChatEndpoint --> HistoryFetch
+    HistoryFetch <--> ConversationsTable
+    HistoryFetch <--> MessagesTable
+    HistoryFetch --> Contextualize
+    Contextualize --> HybridSearch
+    HybridSearch --> Reranker
+    Reranker --> Passages
+    Passages --> PromptAssembler
+    HistoryFetch --> PromptAssembler
+    PromptAssembler --> LLMAdapter
+    LLMAdapter --> RawCompletion
+    RawCompletion --> TagExtractor
+    TagExtractor --> ValidationGate
+    ValidationGate -- "Invalid" --> DiscardTag
+    ValidationGate -- "Valid" --> QuoteDetector
+    QuoteDetector --> SourcePanel
+    SourcePanel --> SaveTurn
+    SaveTurn --> MessagesTable
+    SaveTurn --> FinalChatResponse
+
+    InspectorEndpoint --> SourceDetails
+

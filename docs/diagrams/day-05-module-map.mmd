@@ -1,0 +1,59 @@
+flowchart LR
+    classDef route fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef service fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef db fill:#EDE7F6,stroke:#7E57C2,stroke-width:2px,color:#311B92;
+    classDef retrieval fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef gen fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#880E4F;
+    classDef schema fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C;
+
+    subgraph APIEndpoints ["API Routes Layer"]
+        HealthRoute["GET /api/v1/health<br/>[IMPLEMENTED]"]:::route
+        UploadRoute["POST /api/v1/documents/upload<br/>[IMPLEMENTED]"]:::route
+        SearchRoute["POST /api/v1/search/*<br/>(vector, bm25, hybrid)<br/>[IMPLEMENTED]"]:::route
+        ChatRoute["POST /api/v1/chat<br/>[IMPLEMENTED]"]:::route
+        CitationRoute["GET /api/v1/citations/{chunk_id}<br/>[IMPLEMENTED]"]:::route
+        ConvRoute["/api/v1/conversations/*<br/>(POST, GET, DELETE)<br/>[IMPLEMENTED]"]:::route
+    end
+
+    subgraph ServiceLayer ["Service Orchestration Layer"]
+        DocService["DocumentService<br/>[IMPLEMENTED]"]:::service
+        IndexService["IndexingService<br/>[IMPLEMENTED]"]:::service
+        ChatService["ChatService<br/>[IMPLEMENTED]"]:::service
+        CitationService["CitationService<br/>[IMPLEMENTED]"]:::service
+        ConvService["ConversationService<br/>[IMPLEMENTED]"]:::service
+    end
+
+    subgraph DatabaseLayer ["Relational Persistence (SQLite)"]
+        DBSession["SQLAlchemy Session & Engine<br/>(backend/app/db/session.py)<br/>[IMPLEMENTED]"]:::db
+        ConvModel["ConversationModel<br/>(backend/app/db/models.py)<br/>[IMPLEMENTED]"]:::db
+        MsgModel["MessageModel<br/>(backend/app/db/models.py)<br/>[IMPLEMENTED]"]:::db
+    end
+
+    subgraph RetrievalLayer ["Retrieval & Reranking"]
+        VectorStore["ChromaVectorStore<br/>[IMPLEMENTED]"]:::retrieval
+        BM25Store["BM25IndexManager<br/>[IMPLEMENTED]"]:::retrieval
+        HybridRetriever["HybridRetriever (RRF)<br/>[IMPLEMENTED]"]:::retrieval
+        Reranker["CrossEncoderReranker<br/>[IMPLEMENTED]"]:::retrieval
+    end
+
+    subgraph SchemasLayer ["Pydantic Data Models"]
+        ChatSchemas["ChatRequest / ChatResponse<br/>Citation / RerankedPassage<br/>[IMPLEMENTED]"]:::schema
+        CiteSchemas["SourcePanelItem<br/>SourceInspectorResponse<br/>[IMPLEMENTED]"]:::schema
+        ConvSchemas["ConversationRead/Detail<br/>MessageRead<br/>[IMPLEMENTED]"]:::schema
+    end
+
+    ChatRoute --> ChatService
+    CitationRoute --> CitationService
+    ConvRoute --> ConvService
+    ChatService --> ConvService
+    ChatService --> CitationService
+    ChatService --> HybridRetriever
+    ChatService --> Reranker
+    CitationService --> VectorStore
+    CitationService --> BM25Store
+    ConvService --> DBSession
+    DBSession --> ConvModel & MsgModel
+    ChatRoute --> ChatSchemas
+    CitationRoute --> CiteSchemas
+    ConvRoute --> ConvSchemas
+

@@ -1,0 +1,65 @@
+sequenceDiagram
+    autonumber
+    actor Client as API Client / Caller
+    participant DocRoute as Endpoint (documents.py)
+    participant SearchRoute as Endpoint (search.py)
+    participant DocService as DocumentService
+    participant IndexService as IndexingService
+    participant Chunker as Chunker (chunker.py)
+    participant Embedder as EmbeddingService (all-MiniLM-L6-v2)
+    participant VectorStore as VectorStoreManager
+    participant ChromaDB as ChromaDB (Persistent Storage)
+
+    %% Scenario 1: Upload and Index
+    rect rgb(240, 248, 255)
+        Note over Client, ChromaDB: Workflow A: Upload, Chunk, Embed & Index
+        Client->>DocRoute: POST /api/v1/documents/upload (File)
+        DocRoute->>DocService: process_document_upload(file)
+        DocService->>DocService: Validate & extract pages (Day 1 pipeline)
+        DocService->>IndexService: index_document(document_id, filename, pages)
+
+        IndexService->>Chunker: compute_content_hash(pages)
+        Chunker-->>IndexService: content_hash (SHA-256)
+
+        IndexService->>VectorStore: is_document_indexed(content_hash)
+        alt Document already indexed (Duplicate detection)
+            VectorStore-->>IndexService: True
+            IndexService-->>DocService: (chunk_count, content_hash, is_duplicate=True)
+            DocService-->>DocRoute: DocumentUploadResponse (status="already_indexed")
+            DocRoute-->>Client: HTTP 200 (Already Indexed)
+        else Fresh Document
+            VectorStore-->>IndexService: False
+            IndexService->>Chunker: chunk_extracted_pages(doc_id, filename, pages)
+            Chunker-->>IndexService: List[DocumentChunk] (with page_number & chunk_index)
+
+            IndexService->>Embedder: embed_documents([chunk.text])
+            Note over Embedder: SentenceTransformer encode (384d, normalized)
+            Embedder-->>IndexService: List[List[float]] (Dense vectors)
+
+            IndexService->>VectorStore: upsert_chunks(chunks, embeddings)
+            VectorStore->>ChromaDB: collection.upsert(ids, embeddings, documents, metadatas)
+            ChromaDB-->>VectorStore: OK (Persisted to disk)
+            VectorStore-->>IndexService: upserted_count
+            IndexService-->>DocService: (upserted_count, content_hash, is_duplicate=False)
+            DocService-->>DocRoute: DocumentUploadResponse (status="processed", chunk_count)
+            DocRoute-->>Client: HTTP 200 (Processed & Indexed)
+        end
+    end
+
+    %% Scenario 2: Semantic Vector Search
+    rect rgb(245, 255, 245)
+        Note over Client, ChromaDB: Workflow B: Semantic Vector Search
+        Client->>SearchRoute: POST /api/v1/search/vector {"query": "MFA policy", "top_k": 3}
+        SearchRoute->>IndexService: search_similar_chunks(query, top_k)
+        IndexService->>Embedder: embed_query(query)
+        Embedder-->>IndexService: query_embedding (384d vector)
+
+        IndexService->>VectorStore: query_similar(query_embedding, top_k)
+        VectorStore->>ChromaDB: collection.query(query_embeddings, n_results, include)
+        ChromaDB-->>VectorStore: Raw distances, documents, metadatas
+        Note over VectorStore: Convert cosine distance to similarity: max(0, 1 - dist)
+        VectorStore-->>IndexService: List[VectorSearchResultItem]
+        IndexService-->>SearchRoute: VectorSearchResponse
+        SearchRoute-->>Client: HTTP 200 OK (Ranked matching passages with page citations)
+    end
+

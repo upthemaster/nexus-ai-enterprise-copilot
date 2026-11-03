@@ -1,0 +1,50 @@
+flowchart LR
+    %% Day 7 Backend Module Map & Architecture Boundaries
+
+    subgraph EvaluationSubsystem ["Evaluation & Benchmarking Subsystem (backend/app/evaluation)"]
+        direction TB
+        DatasetModule["dataset.py<br/>• load_golden_dataset()<br/>• seed_evaluation_corpus()<br/>• get_dataset_path()"]:::evalModule
+        MetricsModule["metrics.py<br/>• compute_retrieval_metrics()<br/>• compute_generation_metrics()<br/>• calculate_mrr()<br/>• calculate_context_precision()<br/>• calculate_faithfulness()"]:::evalModule
+        BenchmarksModule["benchmarks.py<br/>• BenchmarkRunner<br/>• retrieve_candidates()<br/>• evaluate_query()<br/>• run_evaluation()<br/>• run_ablation_comparison()"]:::evalModule
+    end
+
+    subgraph SchemasSubsystem ["Schemas Subsystem (backend/app/schemas)"]
+        EvalSchemas["schemas/evaluation.py<br/>• QuestionType<br/>• RetrievalConfig<br/>• GoldenDatasetItem<br/>• RetrievalMetrics<br/>• GenerationMetrics<br/>• OperationalMetrics<br/>• EvaluationRunResponse<br/>• AblationComparisonResponse"]:::schemaModule
+    end
+
+    subgraph ServiceSubsystem ["Service Orchestration (backend/app/services)"]
+        EvalServiceModule["services/evaluation_service.py<br/>• EvaluationService<br/>• ensure_corpus_seeded()<br/>• execute_evaluation()<br/>• execute_ablation()<br/>• list_runs()<br/>• get_run()"]:::serviceModule
+    end
+
+    subgraph APIEndpoints ["REST API Layer (backend/app/api/v1)"]
+        EvalAPIModule["endpoints/evaluation.py<br/>• POST /evaluation/run<br/>• GET /evaluation/ablation<br/>• GET /evaluation/runs<br/>• GET /evaluation/runs/{id}"]:::apiModule
+        Router["router.py<br/>Mounted under /api/v1/evaluation"]:::apiModule
+    end
+
+    subgraph StorageAndCorpus ["Data Storage & Evaluation Assets"]
+        CorpusStorage[("backend/evaluation/corpus/<br/>• eval_sec_policy.txt<br/>• eval_hr_handbook.txt<br/>• eval_cloud_infra.txt<br/>• eval_vendor_risk.txt")]:::assetModule
+        DatasetStorage[("backend/evaluation/datasets/<br/>• v1.jsonl (25 items)")]:::assetModule
+        RunArtifacts[("data/eval_runs/<br/>• eval_*.json")]:::assetModule
+    end
+
+    %% Dependencies
+    DatasetStorage --> DatasetModule
+    CorpusStorage --> DatasetModule
+    DatasetModule --> BenchmarksModule
+    MetricsModule --> BenchmarksModule
+    EvalSchemas --> BenchmarksModule
+    EvalSchemas --> MetricsModule
+    EvalSchemas --> EvalServiceModule
+    EvalSchemas --> EvalAPIModule
+    BenchmarksModule --> EvalServiceModule
+    EvalServiceModule --> RunArtifacts
+    EvalServiceModule --> EvalAPIModule
+    EvalAPIModule --> Router
+
+    %% Styling
+    classDef evalModule fill:#ebf5fb,stroke:#2980b9,stroke-width:2px,color:#1b4f72;
+    classDef schemaModule fill:#fef9e7,stroke:#f39c12,stroke-width:2px,color:#7d6608;
+    classDef serviceModule fill:#e8f8f5,stroke:#1abc9c,stroke-width:2px,color:#16a085;
+    classDef apiModule fill:#f4ecf7,stroke:#8e44ad,stroke-width:2px,color:#512e5f;
+    classDef assetModule fill:#fbeee6,stroke:#e67e22,stroke-width:2px,color:#784212;
+

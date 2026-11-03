@@ -1,0 +1,66 @@
+flowchart LR
+    %% Day 6: Backend Module Map & Service Boundaries
+
+    subgraph APIEndpoints ["app/api/v1/endpoints/"]
+        WFRouter["workflows.py\n- POST /api/v1/workflows/run"]:::api
+        DocRouter["documents.py\n- POST /api/v1/documents/:id/summarize\n- POST /api/v1/documents/:id/risks"]:::api
+        ConsolidatedRouter["router.py\n- Mounts /workflows and /documents"]:::api
+    end
+
+    subgraph ServiceLayer ["app/services/"]
+        WFService["WorkflowService (workflow_service.py)\n- run_workflow()\n- summarize_document()\n- extract_document_risks()"]:::service
+        CitService["CitationService (citation_service.py)\n- validate_citations()\n- validate_and_enrich()"]:::service
+    end
+
+    subgraph WorkflowEngine ["app/workflows/"]
+        WFGraph["graph.py\n- StateGraph compilation\n- classify_query_node\n- route_decision\n- check_evidence_decision"]:::workflow
+        WFState["state.py\n- WorkflowState (TypedDict)"]:::workflow
+        WFTools["tools.py\n- tool_hybrid_search()\n- tool_load_document_chunks()\n- tool_inspect_chunk()"]:::tool
+    end
+
+    subgraph SchemasLayer ["app/schemas/"]
+        WFSchemas["workflow.py\n- WorkflowRequest / Response\n- DocumentSummarizeRequest / Response\n- RiskItem / DocumentRisksResponse"]:::schema
+        ChatSchemas["chat.py\n- RerankedPassage\n- Citation"]:::schema
+    end
+
+    subgraph GenerationLayer ["app/generation/"]
+        PromptsMod["prompts.py\n- SYSTEM_GROUNDING_PROMPT\n- SYSTEM_SUMMARIZATION_PROMPT\n- SYSTEM_RISK_EXTRACTION_PROMPT"]:::gen
+        ProviderMod["provider.py\n- MockLLMProvider (Summarize / Risk)\n- GeminiProvider\n- OpenAICompatibleProvider"]:::gen
+    end
+
+    subgraph StorageRetrieval ["app/retrieval/"]
+        VecStore["vector_store.py\n- get_chunks_by_document()"]:::store
+        BM25Store["bm25_index.py\n- get_chunks_by_document()"]:::store
+        HybridMod["hybrid.py\n- HybridRetriever"]:::store
+        RerankMod["reranker.py\n- CrossEncoderReranker"]:::store
+    end
+
+    %% Wiring
+    WFRouter --> WFService
+    DocRouter --> WFService
+    ConsolidatedRouter --> WFRouter & DocRouter
+
+    WFService --> WFGraph
+    WFGraph --> WFState
+    WFGraph --> WFTools
+    WFGraph --> PromptsMod
+    WFGraph --> ProviderMod
+    WFGraph --> CitService
+
+    WFTools --> HybridMod
+    WFTools --> RerankMod
+    WFTools --> VecStore
+    WFTools --> BM25Store
+
+    WFService --> WFSchemas
+    WFGraph --> ChatSchemas
+
+    %% Classes
+    classDef api fill:#2980b9,stroke:#1f618d,stroke-width:2px,color:#ffffff;
+    classDef service fill:#27ae60,stroke:#1e8449,stroke-width:2px,color:#ffffff;
+    classDef workflow fill:#8e44ad,stroke:#7d3c98,stroke-width:2px,color:#ffffff;
+    classDef schema fill:#d35400,stroke:#ba4a00,stroke-width:2px,color:#ffffff;
+    classDef gen fill:#16a085,stroke:#117864,stroke-width:2px,color:#ffffff;
+    classDef tool fill:#f39c12,stroke:#d68910,stroke-width:2px,color:#ffffff;
+    classDef store fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#ffffff;
+
